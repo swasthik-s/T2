@@ -38,7 +38,21 @@ def atr_stops(candles: pd.DataFrame, period: int = 14, multiple: float = 1.5) ->
     return (atr.where(atr > 0, fallback).clip(lower=1e-8) * multiple).clip(lower=1e-8)
 
 
-def evaluate(candles: pd.DataFrame, signals: pd.Series, stops: pd.Series, slippage: float = 0.02) -> dict:
+def evaluate(candles: pd.DataFrame, signals: pd.Series, stops: pd.Series, side: str = "long", slippage: float = 0.02) -> dict:
+    candles = candles.reset_index(drop=True)
+    signals = signals.fillna(False).astype(bool).reset_index(drop=True)
+    stops = stops.reset_index(drop=True)
+    # Match the research guardrail: at most two candidate entries per UTC day.
+    # This limits signals, not guaranteed fills; a position may still be open.
+    utc_day = pd.to_datetime(candles["timestamp"], utc=True).dt.strftime("%Y-%m-%d")
+    seen: dict[str, int] = {}
+    limited = []
+    for day, signal in zip(utc_day, signals):
+        allowed = bool(signal) and seen.get(day, 0) < 2
+        limited.append(allowed)
+        if allowed:
+            seen[day] = seen.get(day, 0) + 1
+    signals = pd.Series(limited, dtype=bool)
     config = BacktestConfig(
         initial_equity=10_000.0,
         risk_per_trade_pct=0.25,
@@ -48,11 +62,11 @@ def evaluate(candles: pd.DataFrame, signals: pd.Series, stops: pd.Series, slippa
         max_trades=10_000,
     )
     result = run_backtest(
-        candles.reset_index(drop=True),
-        signals.fillna(False).astype(bool).reset_index(drop=True),
-        stops.reset_index(drop=True),
+        candles,
+        signals,
+        stops,
         config=config,
-        side="long",
+        side=side,
     )
     return summarize_backtest(result)
 
@@ -60,10 +74,13 @@ def evaluate(candles: pd.DataFrame, signals: pd.Series, stops: pd.Series, slippa
 def choose_threshold(candles, probabilities, stops, start, end):
     rows = []
     for threshold in (0.50, 0.55, 0.60, 0.65, 0.70):
+        segment_prob = probabilities.iloc[start:end].reset_index(drop=True)
+        threshold_signal = (segment_prob >= threshold) & (segment_prob.shift(1, fill_value=-np.inf) < threshold)
         metrics = evaluate(
             candles.iloc[start:end],
-            probabilities.iloc[start:end] >= threshold,
+            threshold_signal,
             stops.iloc[start:end],
+            side="long",
         )
         eligible = (
             metrics["trades"] >= 30
@@ -166,15 +183,18 @@ def main() -> int:
 
     results = {}
     for name, candidate in candidates.items():
+        side = "short" if name.endswith("_short") else "long"
         validation = evaluate(
             candles.iloc[train_end:val_end],
             candidate["signals"].iloc[train_end:val_end],
             candidate["stops"].iloc[train_end:val_end],
+            side=side,
         )
         test = evaluate(
             candles.iloc[val_end:],
             candidate["signals"].iloc[val_end:],
             candidate["stops"].iloc[val_end:],
+            side=side,
         )
         eligible = (
             validation["trades"] >= 30
@@ -188,6 +208,7 @@ def main() -> int:
             "validation_gate_passed": bool(eligible),
             "test_at_0.02pct_slippage_per_side": safe_metrics(test),
             "test_used_for_selection": False,
+            "max_candidate_signals_per_utc_day": 2,
         }
 
     # Random Forest uses target-before-stop labels and a threshold chosen on validation only.
@@ -203,10 +224,13 @@ def main() -> int:
         selected, threshold_rows = choose_threshold(
             candles, probabilities, stops, train_end, val_end,
         )
+        test_prob = probabilities.iloc[val_end:].reset_index(drop=True)
+        test_signal = (test_prob >= selected["threshold"]) & (test_prob.shift(1, fill_value=-np.inf) < selected["threshold"])
         test_metrics = evaluate(
             candles.iloc[val_end:],
-            probabilities.iloc[val_end:] >= selected["threshold"],
+            test_signal,
             stops.iloc[val_end:],
+            side="long",
         )
         results["random_forest_target_before_stop"] = {
             "family": "supervised_ml",
