@@ -3,7 +3,7 @@
 A label is positive only when the profit target is reached before the stop
 within the forward horizon. Same-candle stop/target ambiguity is labeled 0
 conservatively. Entries are approximated at the next candle open, matching the
-backtest engine's signal timing. Final rows without a complete horizon are NaN.
+backtest engine's signal timing. The entry candle is not inspected, matching the OHLC engine; final rows without a complete horizon are NaN.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def make_target_before_stop_labels(
     opens = data["open"].to_numpy(dtype=float)
     highs = data["high"].to_numpy(dtype=float)
     lows = data["low"].to_numpy(dtype=float)
-    for i in range(len(data) - horizon):
+    for i in range(max(0, len(data) - horizon - 1)):
         distance = float(distances.iloc[i])
         entry = float(opens[i + 1])
         if not np.isfinite(distance) or distance <= 0 or not np.isfinite(entry) or entry <= distance:
@@ -46,7 +46,7 @@ def make_target_before_stop_labels(
         stop = entry - distance
         target = entry + distance * reward_risk_ratio
         label = 0.0  # conservative default for timeout or ambiguous outcome
-        for j in range(i + 1, i + horizon + 1):
+        for j in range(i + 2, i + horizon + 2):
             hit_stop = lows[j] <= stop
             hit_target = highs[j] >= target
             if hit_stop or hit_target:
