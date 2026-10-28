@@ -211,7 +211,7 @@ def save_evaluation_report(backtest: Mapping[str, Any], output_dir: str) -> dict
 
     metrics_path = output / "metrics.json"
     metrics_path.write_text(
-        json.dumps(finite_json(summary), indent=2, allow_nan=False) + "\\n",
+        json.dumps(finite_json(summary), indent=2, allow_nan=False) + "\n",
         encoding="utf-8",
     )
 
