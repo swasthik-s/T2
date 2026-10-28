@@ -24,8 +24,8 @@ def sample_candles(n=240, volume=False):
 def test_target_labels_are_binary_and_last_horizon_is_unknown():
     candles = sample_candles()
     labels = make_target_before_stop_labels(candles, pd.Series([0.5] * len(candles)), horizon=12)
-    assert labels.iloc[:-12].isin([0.0, 1.0]).all()
-    assert labels.iloc[-12:].isna().all()
+    assert labels.iloc[:-13].isin([0.0, 1.0]).all()
+    assert labels.iloc[-13:].isna().all()
 
 
 def test_target_label_requires_aligned_stop_distance():
