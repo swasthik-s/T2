@@ -180,3 +180,62 @@ def chronological_split(
     if split_at < 1 or split_at >= len(data):
         raise ValueError("Need at least two candles to split")
     return data.iloc[:split_at].reset_index(drop=True), data.iloc[split_at:].reset_index(drop=True)
+
+
+def save_evaluation_report(backtest: Mapping[str, Any], output_dir: str) -> dict[str, str]:
+    """Write metrics JSON plus trades, monthly, and equity CSVs to a folder.
+
+    Strict JSON is used: non-finite metric values, such as infinite profit
+    factor when there are no losing trades, are represented as null.
+    """
+    import json
+    from pathlib import Path
+
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+
+    summary = summarize_backtest(backtest)
+
+    def finite_json(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): finite_json(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [finite_json(item) for item in value]
+        if isinstance(value, (np.integer,)):
+            return int(value)
+        if isinstance(value, (np.floating, float)):
+            return float(value) if np.isfinite(value) else None
+        if isinstance(value, (np.bool_,)):
+            return bool(value)
+        return value
+
+    metrics_path = output / "metrics.json"
+    metrics_path.write_text(
+        json.dumps(finite_json(summary), indent=2, allow_nan=False) + "\\n",
+        encoding="utf-8",
+    )
+
+    trades = _trades_frame(backtest)
+    if not trades.empty:
+        trades = trades.copy()
+        for column in ("entry_time", "exit_time"):
+            trades[column] = trades[column].map(lambda stamp: stamp.isoformat())
+    trades_path = output / "trades.csv"
+    trades.to_csv(trades_path, index=False)
+
+    monthly_path = output / "monthly_performance.csv"
+    monthly_performance(backtest).to_csv(monthly_path, index=False)
+
+    equity_path = output / "equity_curve.csv"
+    curve = build_equity_curve(backtest)
+    if not curve.empty:
+        curve = curve.copy()
+        curve["timestamp"] = curve["timestamp"].map(lambda stamp: stamp.isoformat())
+    curve.to_csv(equity_path, index=False)
+
+    return {
+        "metrics_json": str(metrics_path),
+        "trades_csv": str(trades_path),
+        "monthly_csv": str(monthly_path),
+        "equity_curve_csv": str(equity_path),
+    }
