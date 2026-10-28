@@ -109,3 +109,41 @@ def test_summary_rejects_non_finite_pnl():
     trade["trade_log"][0]["net_pnl"] = float("nan")
     with pytest.raises(ValueError, match="finite values"):
         summarize_backtest(trade)
+
+
+def test_save_evaluation_report_writes_metrics_and_csv_files(tmp_path):
+    import json
+
+    from t2.backtesting.evaluation import save_evaluation_report
+
+    paths = save_evaluation_report(sample_backtest(), str(tmp_path))
+    assert set(paths) == {"metrics_json", "trades_csv", "monthly_csv", "equity_curve_csv"}
+    assert all(__import__("pathlib").Path(path).is_file() for path in paths.values())
+
+    metrics = json.loads(__import__("pathlib").Path(paths["metrics_json"]).read_text(encoding="utf-8"))
+    assert metrics["trades"] == 3
+    assert metrics["net_pnl"] == pytest.approx(47.5)
+
+    trades = pd.read_csv(paths["trades_csv"])
+    monthly = pd.read_csv(paths["monthly_csv"])
+    equity = pd.read_csv(paths["equity_curve_csv"])
+    assert len(trades) == 3
+    assert monthly["month"].tolist() == ["2026-01", "2026-02"]
+    assert equity["equity"].iloc[-1] == pytest.approx(1047.5)
+
+
+def test_save_evaluation_report_converts_infinite_profit_factor_to_json_null(tmp_path):
+    import json
+
+    from t2.backtesting.evaluation import save_evaluation_report
+
+    backtest = {
+        "initial_equity": 1000.0,
+        "trade_log": [
+            {"side": "long", "entry_time": "2026-01-01T00:00:00Z", "exit_time": "2026-01-01T00:01:00Z",
+             "gross_pnl": 10.0, "costs": 0.0, "net_pnl": 10.0}
+        ],
+    }
+    paths = save_evaluation_report(backtest, str(tmp_path))
+    metrics = json.loads(__import__("pathlib").Path(paths["metrics_json"]).read_text(encoding="utf-8"))
+    assert metrics["profit_factor"] is None
