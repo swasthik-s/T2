@@ -51,8 +51,14 @@ def build_ema_atr_signals(
     long_signal = (fast > slow) & (fast.shift(1) <= slow.shift(1))
     short_signal = (fast < slow) & (fast.shift(1) >= slow.shift(1))
     stop_distance = atr * atr_stop_multiple
+    # The engine validates the full stop-distance vector, including warm-up rows
+    # where no signal can fire. Use a positive range-based placeholder only for
+    # those non-signal warm-up rows; valid signals still require a real ATR.
+    fallback_distance = (high - low).rolling(atr_period, min_periods=1).mean()
+    fallback_distance = fallback_distance.clip(lower=np.finfo(float).eps) * atr_stop_multiple
+    stop_distance = stop_distance.fillna(fallback_distance)
 
-    valid = stop_distance.notna() & np.isfinite(stop_distance) & (stop_distance > 0)
+    valid = atr.notna() & np.isfinite(stop_distance) & (stop_distance > 0)
     return pd.DataFrame({
         "long_signal": (long_signal & valid).fillna(False).astype(bool),
         "short_signal": (short_signal & valid).fillna(False).astype(bool),
