@@ -93,6 +93,20 @@ def test_ohlc_only_data_is_supported_without_fabricating_volume(tmp_path: Path):
     assert "no synthetic volume" in summary["volume_note"]
 
 
+
+def test_unix_millisecond_timestamps_are_parsed_as_milliseconds():
+    frame = pd.DataFrame({
+        "timestamp": [1730073600000, 1730073900000],
+        "open": [100.0, 101.0],
+        "high": [102.0, 103.0],
+        "low": [99.0, 100.0],
+        "close": [101.0, 102.0],
+    })
+    result = validate_ohlcv(frame)
+    assert result["timestamp"].iloc[0] == pd.Timestamp("2024-10-28T00:00:00Z")
+    assert result["timestamp"].iloc[1] == pd.Timestamp("2024-10-28T00:05:00Z")
+
+
 def test_missing_csv_raises_file_not_found(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         load_ohlcv_csv(tmp_path / "missing.csv")
