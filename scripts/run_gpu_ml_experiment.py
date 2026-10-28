@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 from t2.backtesting.engine import BacktestConfig, run_backtest
 from t2.backtesting.evaluation import summarize_backtest
 from t2.data.ohlcv import load_ohlcv_csv
+from t2.improvement.feedback import diagnose_experiment
 from t2.improvement.gpu_ml import (
     build_causal_features, fit_direction_mlp, make_direction_labels,
     predict_probabilities, select_device,
@@ -48,6 +49,18 @@ def evaluate(candles: pd.DataFrame, signals: pd.Series, stops: pd.Series, slippa
         stops.reset_index(drop=True), config=cfg, side="long",
     )
     return summarize_backtest(raw)
+
+
+def json_safe(value):
+    if isinstance(value, dict):
+        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    if isinstance(value, (float, np.floating)):
+        return float(value) if np.isfinite(value) else None
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    return value
 
 
 def main() -> int:
@@ -99,6 +112,14 @@ def main() -> int:
     for cost in (0.0, 0.005, 0.01, 0.02):
         test_costs[str(cost)] = evaluate(test_candles, test_signal, test_stops, cost)
 
+    feedback = diagnose_experiment({
+        "validation_profit_factor": chosen["profit_factor"],
+        "validation_expectancy_per_trade": chosen["expectancy_per_trade"],
+        "test_profit_factor": test_costs["0.02"]["profit_factor"],
+        "test_expectancy_per_trade": test_costs["0.02"]["expectancy_per_trade"],
+        "test_pnl_by_cost": {cost: metrics["net_pnl"] for cost, metrics in test_costs.items()},
+    })
+
     out_dir = ROOT / "reports/gpu_ml_research"
     out_dir.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -118,6 +139,7 @@ def main() -> int:
         "selected_threshold": chosen["threshold"],
         "validation_gate_passed": chosen["eligible"],
         "test_cost_sensitivity": test_costs,
+        "self_correction_feedback": feedback,
         "limitations": [
             "This is an experimental ML direction classifier, not a validated profitable strategy.",
             "The model is trained once on the chronological training segment; it does not self-modify its code.",
@@ -126,7 +148,7 @@ def main() -> int:
             "The label predicts future close direction, not whether a trade hits target before stop.",
         ],
     }
-    (out_dir / f"summary_{run_id}.json").write_text(json.dumps(result, indent=2, allow_nan=False))
+    (out_dir / f"summary_{run_id}.json").write_text(json.dumps(json_safe(result), indent=2, allow_nan=False))
     pd.DataFrame(rows).to_csv(out_dir / f"validation_thresholds_{run_id}.csv", index=False)
     print(f"Device: {fit.device}")
     print(f"Rows: {n:,} | Train: {train_end:,} | Validation: {val_end-train_end:,} | Test: {n-val_end:,}")
