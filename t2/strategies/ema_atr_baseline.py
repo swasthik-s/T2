@@ -21,10 +21,14 @@ def build_ema_atr_signals(
     atr_period: int = 14,
     atr_stop_multiple: float = 1.5,
 ) -> pd.DataFrame:
-    """Return causal crossover signals and ATR stop distances.
+    """Return causal crossover signals and positive stop distances.
 
-    A signal is true only on the candle where fast EMA crosses slow EMA.
-    The engine evaluates the signal at candle close and enters next candle open.
+    Signals require a finite, strictly positive ATR. Flat/no-movement candles
+    therefore cannot trigger trades. The backtest engine validates every stop
+    distance row, including rows where no signal fires, so a tiny positive
+    placeholder is used only on rows where ATR is missing or non-positive and
+    both trade signals are forced false. This placeholder is never used to
+    size an actual trade.
     """
     if not (isinstance(fast_ema, int) and isinstance(slow_ema, int)
             and isinstance(atr_period, int) and 1 <= fast_ema < slow_ema
@@ -51,14 +55,15 @@ def build_ema_atr_signals(
     long_signal = (fast > slow) & (fast.shift(1) <= slow.shift(1))
     short_signal = (fast < slow) & (fast.shift(1) >= slow.shift(1))
     stop_distance = atr * atr_stop_multiple
-    # The engine validates the full stop-distance vector, including warm-up rows
-    # where no signal can fire. Use a positive range-based placeholder only for
-    # those non-signal warm-up rows; valid signals still require a real ATR.
-    fallback_distance = (high - low).rolling(atr_period, min_periods=1).mean()
-    fallback_distance = fallback_distance.clip(lower=np.finfo(float).eps) * atr_stop_multiple
-    stop_distance = stop_distance.fillna(fallback_distance)
 
-    valid = atr.notna() & np.isfinite(stop_distance) & (stop_distance > 0)
+    # Positive fallback is only for rows that cannot generate a signal.
+    fallback_distance = (
+        (high - low).rolling(atr_period, min_periods=1).mean()
+        .clip(lower=np.finfo(float).eps) * atr_stop_multiple
+    )
+    valid = atr.notna() & np.isfinite(atr) & (atr > 0)
+    stop_distance = stop_distance.where(valid, fallback_distance)
+
     return pd.DataFrame({
         "long_signal": (long_signal & valid).fillna(False).astype(bool),
         "short_signal": (short_signal & valid).fillna(False).astype(bool),
