@@ -102,9 +102,20 @@ def main() -> int:
                 "report_files": paths,
             }
 
+    def strict_json(value):
+        if isinstance(value, dict):
+            return {str(key): strict_json(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [strict_json(item) for item in value]
+        if isinstance(value, float):
+            import math
+            return value if math.isfinite(value) else None
+        return value
+
+    safe_summary = strict_json(summary)
     summary_path = root / "summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2, allow_nan=False, default=str) + "\n", encoding="utf-8")
-    print(json.dumps(summary, indent=2, allow_nan=False, default=str))
+    summary_path.write_text(json.dumps(safe_summary, indent=2, allow_nan=False, default=str) + "\n", encoding="utf-8")
+    print(json.dumps(safe_summary, indent=2, allow_nan=False, default=str))
     print(f"\nSaved summary: {summary_path}")
     return 0
 
