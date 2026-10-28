@@ -1,0 +1,6 @@
+# Keep the foundation lightweight; add broker/vision SDKs only when needed.
+pandas>=2.2,<3.0
+numpy>=1.26,<3.0
+pydantic>=2.7,<3.0
+PyYAML>=6.0,<7.0
+pytest>=8.0,<9.0
