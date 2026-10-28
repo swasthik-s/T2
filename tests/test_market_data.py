@@ -71,6 +71,26 @@ def test_csv_loader_and_summary(tmp_path: Path, valid_candles):
     assert summary["rows"] == 2
     assert summary["duplicate_timestamps"] == 0
     assert summary["missing_intervals_checked"] is False
+    assert summary["volume_available"] is True
+
+
+def test_ohlc_only_data_is_supported_without_fabricating_volume(tmp_path: Path):
+    frame = pd.DataFrame({
+        "timestamp": ["2026-01-02T00:00:00Z", "2026-01-02T00:05:00Z"],
+        "open": [100.0, 101.0],
+        "high": [102.0, 103.0],
+        "low": [99.0, 100.0],
+        "close": [101.0, 102.0],
+    })
+    csv_path = tmp_path / "ohlc_only.csv"
+    frame.to_csv(csv_path, index=False)
+
+    loaded = load_ohlcv_csv(csv_path)
+    summary = describe_ohlcv(loaded)
+
+    assert "volume" not in loaded.columns
+    assert summary["volume_available"] is False
+    assert "no synthetic volume" in summary["volume_note"]
 
 
 def test_missing_csv_raises_file_not_found(tmp_path: Path):
