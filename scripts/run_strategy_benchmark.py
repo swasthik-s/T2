@@ -181,8 +181,8 @@ def main() -> int:
         candles, stops, horizon=12, reward_risk_ratio=2.0,
     )
     # Purge labels whose forward outcomes can cross the train/validation boundary.
-    labels.iloc[max(0, train_end - 12):train_end] = np.nan
-    labels.iloc[max(0, val_end - 12):val_end] = np.nan
+    labels.iloc[max(0, train_end - 13):train_end] = np.nan
+    labels.iloc[max(0, val_end - 13):val_end] = np.nan
     try:
         model, probabilities = fit_random_forest(features, labels, train_end)
         selected, threshold_rows = choose_threshold(
