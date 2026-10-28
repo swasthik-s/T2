@@ -1,0 +1,38 @@
+app:
+  name: T2
+  environment: development
+  timezone: UTC
+
+trading:
+  paper_trading_only: true
+  live_trading_enabled: false
+  allow_order_submission: false
+  max_open_positions: 1
+  max_trades_per_day: 2
+  risk_per_trade_pct: 0.25
+  max_daily_loss_pct: 1.0
+  max_drawdown_pct: 3.0
+  require_fresh_market_data: true
+  require_strategy_validation: true
+
+research:
+  exclude_indicators:
+    - VWAP
+  chronological_train_pct: 60
+  chronological_validation_pct: 20
+  chronological_test_pct: 20
+  require_transaction_costs: true
+  require_walk_forward: true
+  require_parameter_sensitivity: true
+  require_multiple_regimes: true
+  auto_promote_strategy: false
+
+vision:
+  enabled: false
+  require_timestamp: true
+  treat_output_as_observation_only: true
+
+logging:
+  level: INFO
+  store_strategy_versions: true
+  store_experiment_results: true
