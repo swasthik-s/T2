@@ -60,7 +60,23 @@ def validate_ohlcv(frame: pd.DataFrame) -> pd.DataFrame:
 
     result = _normalize_columns(frame)
     try:
-        result["timestamp"] = pd.to_datetime(result["timestamp"], utc=True, errors="raise")
+        raw_timestamps = result["timestamp"]
+        if pd.api.types.is_numeric_dtype(raw_timestamps):
+            finite_ts = pd.to_numeric(raw_timestamps, errors="raise").to_numpy(dtype=float)
+            if not np.isfinite(finite_ts).all():
+                raise ValueError("non-finite numeric timestamp")
+            magnitude = float(np.median(np.abs(finite_ts)))
+            if magnitude >= 1e14:
+                unit = "ns"
+            elif magnitude >= 1e11:
+                unit = "ms"
+            elif magnitude >= 1e9:
+                unit = "s"
+            else:
+                raise ValueError("numeric timestamps are not a recognized Unix epoch")
+            result["timestamp"] = pd.to_datetime(raw_timestamps, unit=unit, utc=True, errors="raise")
+        else:
+            result["timestamp"] = pd.to_datetime(raw_timestamps, utc=True, errors="raise")
     except (ValueError, TypeError, OverflowError) as exc:
         raise MarketDataError("Timestamp column contains invalid values.") from exc
     if result["timestamp"].isna().any():
