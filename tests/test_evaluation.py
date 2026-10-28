@@ -16,7 +16,7 @@ def sample_backtest():
         "trade_log": [
             {"side": "long", "entry_time": "2026-01-02T00:00:00Z", "exit_time": "2026-01-02T00:02:00Z",
              "gross_pnl": 20.0, "costs": 1.0, "net_pnl": 19.0},
-            {"side": "short", "entry_time": "2026-01-03T00:00:00Z", "exit_time": "2026-02-01T00:02:00Z",
+            {"side": "short", "entry_time": "2026-01-03T00:00:00Z", "exit_time": "2026-01-03T00:02:00Z",
              "gross_pnl": -10.0, "costs": 0.5, "net_pnl": -10.5},
             {"side": "long", "entry_time": "2026-02-03T00:00:00Z", "exit_time": "2026-02-03T00:02:00Z",
              "gross_pnl": 40.0, "costs": 1.0, "net_pnl": 39.0},
