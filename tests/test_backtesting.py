@@ -100,10 +100,11 @@ def test_short_stop_hit_has_expected_loss():
 
 
 def test_open_position_at_end_is_reported_not_closed():
+    # Keep all candles strictly between the stop (99) and target (102).
     data = candles([
-        ("2026-01-01T00:00:00Z", 100, 101, 99, 100, 10),
-        ("2026-01-01T00:01:00Z", 100, 101, 99, 100, 10),
-        ("2026-01-01T00:02:00Z", 100, 101, 99, 100, 10),
+        ("2026-01-01T00:00:00Z", 100, 100.5, 99.5, 100, 10),
+        ("2026-01-01T00:01:00Z", 100, 100.5, 99.5, 100, 10),
+        ("2026-01-01T00:02:00Z", 100, 100.5, 99.5, 100, 10),
     ])
     result = run_backtest(data, [True, False, False], 1.0)
     assert result["trades"] == 0
