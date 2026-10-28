@@ -124,6 +124,21 @@ def safe_metrics(metrics):
     }
 
 
+def json_safe(value):
+    """Convert NumPy values and non-finite metrics to strict JSON-safe values."""
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        return float(value) if np.isfinite(value) else None
+    if isinstance(value, (np.bool_,)):
+        return bool(value)
+    return value
+
+
 def main() -> int:
     source = Path(sys.argv[1]) if len(sys.argv) > 1 else (
         ROOT / "data/historical/xauusd_m5_2024-10-28_to_2026-10-28.csv"
@@ -240,7 +255,7 @@ def main() -> int:
         ],
     }
     json_path = out_dir / f"summary_{run_id}.json"
-    json_path.write_text(json.dumps(report, indent=2, allow_nan=False), encoding="utf-8")
+    json_path.write_text(json.dumps(json_safe(report), indent=2, allow_nan=False), encoding="utf-8")
     rows = []
     for name, result in results.items():
         validation = result["validation"] if "validation" in result else next(
